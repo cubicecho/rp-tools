@@ -20,10 +20,13 @@ export interface Spell {
   spellMechanic: SpellMechanic;
   attackType: 'melee' | 'ranged' | null;
   saveAbility: string | null;
-  damageDice: string | null;
+  damageDice: string | null;      // per-hit dice
   damageType: string | null;
   healDice: string | null;
-  higherLevelDice: string | null;
+  higherLevelDice: string | null; // extra per-hit dice or extra hit dice per slot level
+  hitCount: number | null;        // null / 1 = single hit
+  attackPerHit: boolean;          // each hit needs its own attack roll (e.g. Scorching Ray)
+  hitsScaleWithLevel: boolean;    // +1 hit per slot level above base
 }
 
 export interface ClassData {
