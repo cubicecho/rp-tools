@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { BookOpen, Wand2, Swords } from 'lucide-react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { BookOpen, Wand2, Swords, UserCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -8,8 +7,10 @@ import { SpellSlotTracker } from '@/components/SpellSlotTracker'
 import { SpellBrowser } from '@/components/SpellBrowser'
 import { MySpells } from '@/components/MySpells'
 import { PlayView } from '@/components/PlayView'
+import { CharacterSheet } from '@/components/CharacterSheet'
 import { useCharacter } from '@/hooks/useCharacter'
 import { useSpells } from '@/hooks/useSpells'
+import { spellSaveDC, spellAttackBonus, formatMod } from '@/lib/stats'
 import type { ClassData } from '@/types'
 
 type View = 'manage' | 'play'
@@ -18,6 +19,7 @@ export default function App() {
   const [classes, setClasses] = useState<ClassData[]>([])
   const [view, setView] = useState<View>('play')
   const [mobilePanel, setMobilePanel] = useState<'mine' | 'browse'>('mine')
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   useEffect(() => {
     fetch('/data/classes.json').then(r => r.json()).then(d => setClasses(d.classes))
@@ -28,6 +30,7 @@ export default function App() {
     currentClass,
     setClass,
     setLevel,
+    updateStats,
     addSpell,
     removeSpell,
     togglePrepared,
@@ -40,14 +43,15 @@ export default function App() {
 
   const knownIds = useMemo(() => new Set(character.knownSpells.map(s => s.spellId)), [character.knownSpells])
 
-  const levelOptions = Array.from({ length: 20 }, (_, i) => i + 1)
+  const dc = currentClass ? spellSaveDC(character.level, character.classId, character.stats) : null
+  const atk = currentClass ? spellAttackBonus(character.level, character.classId, character.stats) : null
 
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="border-b bg-card px-4 py-3 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex flex-col gap-3">
-          {/* Top row: logo + view switcher + class/level */}
+          {/* Top row */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2 shrink-0">
               <Wand2 className="h-5 w-5 text-primary" />
@@ -78,39 +82,36 @@ export default function App() {
               </Button>
             </div>
 
-            {/* Class + level selectors */}
+            {/* Spellcasting summary + character button */}
             <div className="flex items-center gap-2 ml-auto flex-wrap">
-              <Select
-                value={character.classId || ''}
-                onValueChange={v => setClass(v, character.edition)}
+              {currentClass && dc !== null && atk !== null && (
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span>
+                    <span className="text-muted-foreground">DC </span>
+                    <span className="font-semibold text-foreground">{dc}</span>
+                  </span>
+                  <span>
+                    <span className="text-muted-foreground">Atk </span>
+                    <span className="font-semibold text-foreground">{formatMod(atk)}</span>
+                  </span>
+                  <span className="text-muted-foreground">
+                    {currentClass.name} {character.level}
+                  </span>
+                </div>
+              )}
+              <Button
+                variant={character.classId ? 'outline' : 'default'}
+                size="sm"
+                className="h-7 px-2 gap-1.5 text-xs"
+                onClick={() => setSheetOpen(true)}
               >
-                <SelectTrigger className="h-8 w-36 text-xs">
-                  <SelectValue placeholder="Pick class…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={String(character.level)}
-                onValueChange={v => setLevel(Number(v))}
-              >
-                <SelectTrigger className="h-8 w-24 text-xs">
-                  <SelectValue placeholder="Level" />
-                </SelectTrigger>
-                <SelectContent>
-                  {levelOptions.map(l => (
-                    <SelectItem key={l} value={String(l)}>Level {l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <UserCircle className="h-3.5 w-3.5" />
+                {character.classId ? 'Character' : 'Set up character'}
+              </Button>
             </div>
           </div>
 
-          {/* Spell slot tracker — always visible when class is selected */}
+          {/* Spell slot tracker */}
           {currentClass && (
             <SpellSlotTracker
               character={character}
@@ -128,10 +129,11 @@ export default function App() {
           <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
             <Wand2 className="h-12 w-12 text-muted-foreground" />
             <h2 className="text-lg font-medium">Choose a class to get started</h2>
-            <p className="text-sm text-muted-foreground">Select your class and level from the header above.</p>
+            <p className="text-sm text-muted-foreground">
+              Click <strong>Set up character</strong> in the header.
+            </p>
           </div>
         ) : view === 'play' ? (
-          /* ── Play view ── */
           loading ? (
             <p className="text-sm text-muted-foreground">Loading spells…</p>
           ) : (
@@ -146,9 +148,7 @@ export default function App() {
             />
           )
         ) : (
-          /* ── Manage view ── */
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* My Spells panel */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4 text-primary" />
@@ -179,7 +179,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Spell Browser panel */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <Wand2 className="h-4 w-4 text-primary" />
@@ -202,6 +201,16 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <CharacterSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        character={character}
+        classes={classes}
+        onSetClass={setClass}
+        onSetLevel={setLevel}
+        onUpdateStats={updateStats}
+      />
     </div>
   )
 }

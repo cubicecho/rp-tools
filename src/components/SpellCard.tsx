@@ -3,10 +3,10 @@ import { Star, Zap, Trash2, Info, Clock, MapPin, Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { Separator } from '@/components/ui/separator'
 import { SpellDetail } from '@/components/SpellDetail'
+import { CastRoller } from '@/components/CastRoller'
 import { SCHOOL_COLORS, LEVEL_LABELS, cn } from '@/lib/utils'
 import type { Spell } from '@/types'
 
@@ -17,6 +17,8 @@ interface SpellCardProps {
   currentPactSlots: number
   pactSlotLevel: number
   isPact: boolean
+  spellSaveDC: number
+  spellAttackBonus: number
   variant?: 'compact' | 'detailed'
   onTogglePrepared: () => void
   onCast: (slotLevel: number) => void
@@ -31,13 +33,15 @@ export function SpellCard({
   currentPactSlots,
   pactSlotLevel,
   isPact,
+  spellSaveDC,
+  spellAttackBonus,
   variant = 'compact',
   onTogglePrepared,
   onCast,
   onRemove,
   onDetail,
 }: SpellCardProps) {
-  const [castDialogOpen, setCastDialogOpen] = useState(false)
+  const [castRollerOpen, setCastRollerOpen] = useState(false)
   const [descExpanded, setDescExpanded] = useState(false)
   const [hoverOpen, setHoverOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -56,9 +60,7 @@ export function SpellCard({
   const canCast = isCantrip || availableSlots.length > 0
 
   function handleCastClick() {
-    if (isCantrip) { onCast(0); return }
-    if (availableSlots.length === 1) { onCast(availableSlots[0]); return }
-    setCastDialogOpen(true)
+    setCastRollerOpen(true)
   }
 
   return (
@@ -262,21 +264,17 @@ export function SpellCard({
         </Card>
       )}
 
-      <Dialog open={castDialogOpen} onOpenChange={setCastDialogOpen}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader>
-            <DialogTitle>Cast {spell.name}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">Choose a slot level:</p>
-          <div className="grid grid-cols-3 gap-2">
-            {availableSlots.map(lvl => (
-              <Button key={lvl} variant="outline" onClick={() => { onCast(lvl); setCastDialogOpen(false) }}>
-                {LEVEL_LABELS[lvl]}
-              </Button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CastRoller
+        spell={spell}
+        open={castRollerOpen}
+        availableSlots={availableSlots}
+        isPact={isPact}
+        pactSlotLevel={pactSlotLevel}
+        spellSaveDC={spellSaveDC}
+        spellAttackBonus={spellAttackBonus}
+        onCast={onCast}
+        onClose={() => setCastRollerOpen(false)}
+      />
     </>
   )
 }

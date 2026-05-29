@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SpellCard } from '@/components/SpellCard'
 import { SpellDetail } from '@/components/SpellDetail'
 import { getPactSlotLevel } from '@/lib/spellSlots'
+import { spellSaveDC, spellAttackBonus } from '@/lib/stats'
 import { LEVEL_LABELS } from '@/lib/utils'
 import type { Spell, KnownSpell, ClassData, Character } from '@/types'
 
@@ -35,6 +36,8 @@ export function PlayView({
 
   const isPact = currentClass?.spellcastingType === 'pact'
   const pactSlotLevel = currentClass ? getPactSlotLevel(currentClass, character.level) : 0
+  const dc = currentClass ? spellSaveDC(character.level, character.classId, character.stats) : 0
+  const atk = currentClass ? spellAttackBonus(character.level, character.classId, character.stats) : 0
 
   const resolved = useMemo(() =>
     knownSpells
@@ -111,6 +114,8 @@ export function PlayView({
               currentPactSlots={character.currentPactSlots}
               pactSlotLevel={pactSlotLevel}
               isPact={isPact}
+              spellSaveDC={dc}
+              spellAttackBonus={atk}
               onTogglePrepared={() => onTogglePrepared(spell.id)}
               onCast={onCast}
               onRemove={() => onRemove(spell.id)}

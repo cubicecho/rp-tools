@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Character, ClassData, Edition } from '@/types';
+import type { Character, ClassData, Edition, AbilityScores } from '@/types';
 import { buildCharacter, updateSlots, shortRest, longRest, useSlot, usePactSlot, getMaxSlots, getMaxPactSlots } from '@/lib/spellSlots';
 
 const STORAGE_KEY = 'rp-tools-character';
@@ -11,13 +11,17 @@ const DEFAULT_CHARACTER: Character = {
   knownSpells: [],
   currentSlots: [],
   currentPactSlots: 0,
+  stats: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
 };
 
 export function useCharacter(classes: ClassData[]) {
   const [character, setCharacterRaw] = useState<Character>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : DEFAULT_CHARACTER;
+      const parsed = stored ? JSON.parse(stored) : DEFAULT_CHARACTER;
+      // Migrate old saves that lack stats
+      if (!parsed.stats) parsed.stats = DEFAULT_CHARACTER.stats;
+      return parsed;
     } catch {
       return DEFAULT_CHARACTER;
     }
@@ -40,7 +44,7 @@ export function useCharacter(classes: ClassData[]) {
   const setClass = useCallback((classId: string, edition: Edition) => {
     const cls = classes.find(c => c.id === classId);
     if (!cls) return;
-    setCharacter(prev => buildCharacter(classId, prev.level, edition, cls));
+    setCharacter(prev => buildCharacter(classId, prev.level, edition, cls, prev.stats));
   }, [classes, setCharacter]);
 
   const setLevel = useCallback((level: number) => {
@@ -48,17 +52,17 @@ export function useCharacter(classes: ClassData[]) {
       setCharacter(prev => ({ ...prev, level }));
       return;
     }
-    setCharacter(prev => {
-      const base = { ...prev, level };
-      const maxSlots = getMaxSlots(currentClass, level);
-      const maxPact = getMaxPactSlots(currentClass, level);
-      return {
-        ...base,
-        currentSlots: maxSlots,
-        currentPactSlots: maxPact,
-      };
-    });
+    setCharacter(prev => ({
+      ...prev,
+      level,
+      currentSlots: getMaxSlots(currentClass, level),
+      currentPactSlots: getMaxPactSlots(currentClass, level),
+    }));
   }, [currentClass, setCharacter]);
+
+  const updateStats = useCallback((patch: Partial<AbilityScores>) => {
+    setCharacter(prev => ({ ...prev, stats: { ...prev.stats, ...patch } }));
+  }, [setCharacter]);
 
   const addSpell = useCallback((spellId: string) => {
     setCharacter(prev => {
@@ -112,6 +116,7 @@ export function useCharacter(classes: ClassData[]) {
     currentClass,
     setClass,
     setLevel,
+    updateStats,
     addSpell,
     removeSpell,
     togglePrepared,

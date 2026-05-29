@@ -13,7 +13,9 @@ export function getPactSlotLevel(cls: ClassData, level: number): number {
   return cls.pactSlots?.[level - 1]?.level ?? 0;
 }
 
-export function buildCharacter(classId: string, level: number, edition: Edition, cls: ClassData): Character {
+const DEFAULT_STATS = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+
+export function buildCharacter(classId: string, level: number, edition: Edition, cls: ClassData, prevStats?: Character['stats']): Character {
   return {
     classId,
     level,
@@ -21,6 +23,7 @@ export function buildCharacter(classId: string, level: number, edition: Edition,
     knownSpells: [],
     currentSlots: getMaxSlots(cls, level),
     currentPactSlots: getMaxPactSlots(cls, level),
+    stats: prevStats ?? DEFAULT_STATS,
   };
 }
 
