@@ -6,3 +6,6 @@ dist/
 .env.*
 !.env.example
 .agents/
+
+*.tsbuildinfo
+dev-dist

@@ -95,6 +95,7 @@ export function MySpells({
                     isPact={isPact}
                     spellSaveDC={dc}
                     spellAttackBonus={atk}
+                    characterLevel={character.level}
                     onTogglePrepared={() => onTogglePrepared(spell.id)}
                     onCast={onCast}
                     onRemove={() => onRemove(spell.id)}

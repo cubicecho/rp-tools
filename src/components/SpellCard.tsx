@@ -19,6 +19,7 @@ interface SpellCardProps {
   isPact: boolean
   spellSaveDC: number
   spellAttackBonus: number
+  characterLevel: number
   variant?: 'compact' | 'detailed'
   onTogglePrepared: () => void
   onCast: (slotLevel: number) => void
@@ -35,6 +36,7 @@ export function SpellCard({
   isPact,
   spellSaveDC,
   spellAttackBonus,
+  characterLevel,
   variant = 'compact',
   onTogglePrepared,
   onCast,
@@ -272,6 +274,7 @@ export function SpellCard({
         pactSlotLevel={pactSlotLevel}
         spellSaveDC={spellSaveDC}
         spellAttackBonus={spellAttackBonus}
+        characterLevel={characterLevel}
         onCast={onCast}
         onClose={() => setCastRollerOpen(false)}
       />

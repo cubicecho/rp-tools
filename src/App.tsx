@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { BookOpen, Wand2, Swords, UserCircle } from 'lucide-react'
+import { BookOpen, Wand2, Swords, UserCircle, ScrollText } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -7,13 +7,14 @@ import { SpellSlotTracker } from '@/components/SpellSlotTracker'
 import { SpellBrowser } from '@/components/SpellBrowser'
 import { MySpells } from '@/components/MySpells'
 import { PlayView } from '@/components/PlayView'
+import { ReferenceView } from '@/components/ReferenceView'
 import { CharacterSheet } from '@/components/CharacterSheet'
 import { useCharacter } from '@/hooks/useCharacter'
 import { useSpells } from '@/hooks/useSpells'
 import { spellSaveDC, spellAttackBonus, formatMod } from '@/lib/stats'
 import type { ClassData } from '@/types'
 
-type View = 'manage' | 'play'
+type View = 'manage' | 'play' | 'reference'
 
 export default function App() {
   const [classes, setClasses] = useState<ClassData[]>([])
@@ -22,7 +23,7 @@ export default function App() {
   const [sheetOpen, setSheetOpen] = useState(false)
 
   useEffect(() => {
-    fetch('/data/classes.json').then(r => r.json()).then(d => setClasses(d.classes))
+    fetch(`${import.meta.env.BASE_URL}data/classes.json`).then(r => r.json()).then(d => setClasses(d.classes))
   }, [])
 
   const {
@@ -80,6 +81,16 @@ export default function App() {
                 <Swords className="h-3.5 w-3.5 mr-1.5" />
                 Play
               </Button>
+              <div className="w-px bg-border" />
+              <Button
+                variant={view === 'reference' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-7 px-3 text-xs rounded-none border-0"
+                onClick={() => setView('reference')}
+              >
+                <ScrollText className="h-3.5 w-3.5 mr-1.5" />
+                Reference
+              </Button>
             </div>
 
             {/* Spellcasting summary + character button */}
@@ -133,6 +144,15 @@ export default function App() {
               Click <strong>Set up character</strong> in the header.
             </p>
           </div>
+        ) : view === 'reference' ? (
+          loading ? (
+            <p className="text-sm text-muted-foreground">Loading spells…</p>
+          ) : (
+            <ReferenceView
+              knownSpells={character.knownSpells}
+              spellById={byId}
+            />
+          )
         ) : view === 'play' ? (
           loading ? (
             <p className="text-sm text-muted-foreground">Loading spells…</p>

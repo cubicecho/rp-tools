@@ -124,10 +124,14 @@ function parseSpellMechanics(spell) {
     spellMechanic = 'utility';
   }
 
+  // Cantrip scaling: "Cantrip Upgrade" section present
+  const cantripScaling = /cantrip\s+upgrade/i.test(desc);
+
   return {
     spellMechanic, attackType, saveAbility,
     damageDice, damageType, healDice, higherLevelDice,
     hitCount, attackPerHit, hitsScaleWithLevel,
+    cantripScaling,
   };
 }
 

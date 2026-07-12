@@ -41,6 +41,19 @@ export function spellAttackBonus(level: number, classId: string, stats: AbilityS
   return proficiencyBonus(level) + mod;
 }
 
+export function cantripDiceMultiplier(level: number): number {
+  if (level >= 17) return 4;
+  if (level >= 11) return 3;
+  if (level >= 5) return 2;
+  return 1;
+}
+
+export function scaleCantripDice(damageDice: string, level: number): string {
+  const m = damageDice.match(/^(\d+)d(\d+)$/);
+  if (!m) return damageDice;
+  return `${parseInt(m[1]) * cantripDiceMultiplier(level)}d${m[2]}`;
+}
+
 export interface DiceResult {
   expression: string;
   rolls: number[];

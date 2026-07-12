@@ -7,7 +7,8 @@ export function useSpells(edition: Edition) {
 
   useEffect(() => {
     setLoading(true);
-    const file = edition === '5.5e' ? '/data/spells-5.5e.json' : '/data/spells-5e.json';
+    const base = import.meta.env.BASE_URL;
+    const file = edition === '5.5e' ? `${base}data/spells-5.5e.json` : `${base}data/spells-5e.json`;
     fetch(file)
       .then(r => r.json())
       .then(data => { setSpells(data.spells); setLoading(false); })

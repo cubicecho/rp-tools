@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react'
-import { Dices } from 'lucide-react'
+import { Dices, RefreshCw } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { LEVEL_LABELS, SCHOOL_COLORS } from '@/lib/utils'
-import { rollDice, upcastDice, formatMod, type DiceResult } from '@/lib/stats'
+import { rollDice, upcastDice, scaleCantripDice, formatMod, type DiceResult } from '@/lib/stats'
 import type { Spell } from '@/types'
 
-interface HitResult {
-  attack: DiceResult | null
-  damage: DiceResult | null
+interface RollResult {
+  attacks: DiceResult[]   // one per hit for attack spells
+  damages: DiceResult[]   // one per hit (or one total for save spells)
+  heal: DiceResult | null
 }
 
 interface CastRollerProps {
@@ -21,87 +22,85 @@ interface CastRollerProps {
   pactSlotLevel: number
   spellSaveDC: number
   spellAttackBonus: number
+  characterLevel: number
   onCast: (slotLevel: number) => void
   onClose: () => void
 }
 
 export function CastRoller({
   spell, open, availableSlots, isPact, pactSlotLevel,
-  spellSaveDC, spellAttackBonus, onCast, onClose,
+  spellSaveDC, spellAttackBonus, characterLevel, onCast, onClose,
 }: CastRollerProps) {
   const [selectedSlot, setSelectedSlot] = useState(0)
-  const [singleHitRoll, setSingleHitRoll] = useState<DiceResult | null>(null)
-  const [singleDmgRoll, setSingleDmgRoll] = useState<DiceResult | null>(null)
-  const [singleHealRoll, setSingleHealRoll] = useState<DiceResult | null>(null)
-  const [perHitResults, setPerHitResults] = useState<HitResult[]>([])
+  const [result, setResult] = useState<RollResult | null>(null)
 
   useEffect(() => {
     if (!spell) return
-    setSingleHitRoll(null); setSingleDmgRoll(null); setSingleHealRoll(null)
+    setResult(null)
     if (spell.level === 0) setSelectedSlot(0)
     else if (isPact) setSelectedSlot(pactSlotLevel)
     else setSelectedSlot(availableSlots[0] ?? spell.level)
   }, [spell, availableSlots, isPact, pactSlotLevel])
 
-  // Reset per-hit results whenever slot or spell changes
-  useEffect(() => {
-    if (!spell) return
-    const n = effectiveHitCount(spell, selectedSlot)
-    setPerHitResults(Array.from({ length: n }, () => ({ attack: null, damage: null })))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spell?.id, selectedSlot])
+  useEffect(() => { setResult(null) }, [selectedSlot])
 
   if (!spell) return null
 
   const isCantrip = spell.level === 0
   const slotsAbove = isCantrip ? 0 : Math.max(0, selectedSlot - spell.level)
   const isMultiHit = (spell.hitCount ?? 1) > 1
-  const schoolColor = SCHOOL_COLORS[spell.school] ?? 'bg-gray-100 text-gray-800 border-gray-300'
+  const nHits = isMultiHit
+    ? (spell.hitCount ?? 1) + (spell.hitsScaleWithLevel ? slotsAbove : 0)
+    : 1
 
-  function effectiveHitCount(s: Spell, slot: number): number {
-    const base = s.hitCount ?? 1
-    if (!s.hitsScaleWithLevel || s.level === 0) return base
-    return base + Math.max(0, slot - s.level)
-  }
+  // Single-hit damage dice — cantrip level scaling takes priority over slot upcast
+  const baseDamageDice = spell.cantripScaling && spell.damageDice
+    ? scaleCantripDice(spell.damageDice, characterLevel)
+    : spell.damageDice
 
-  const nHits = effectiveHitCount(spell, selectedSlot)
-
-  // For single-hit spells, compute total damage dice with upcast
   const singleDamageDice =
-    spell.damageDice && !isMultiHit && spell.higherLevelDice && slotsAbove > 0
-      ? upcastDice(spell.damageDice, spell.higherLevelDice, slotsAbove)
-      : spell.damageDice
+    !isMultiHit && baseDamageDice && spell.higherLevelDice && slotsAbove > 0
+      ? upcastDice(baseDamageDice, spell.higherLevelDice, slotsAbove)
+      : baseDamageDice
 
-  // For multi-hit auto-hit: combine into one roll (e.g. 3d4 for 3 Magic Missiles)
-  function multiAutoHitExpression(): string | null {
-    if (!spell.damageDice) return null
-    const m = spell.damageDice.match(/^(\d+)d(\d+)$/)
-    if (!m) return spell.damageDice
-    return `${parseInt(m[1]) * nHits}d${m[2]}`
-  }
-
-  function rollPerHitAttack(i: number) {
-    const result = rollDice('1d20')
-    setPerHitResults(prev => prev.map((r, idx) => idx === i ? { ...r, attack: result } : r))
-  }
-
-  function rollPerHitDamage(i: number) {
-    if (!spell.damageDice) return
-    const result = rollDice(spell.damageDice)
-    setPerHitResults(prev => prev.map((r, idx) => idx === i ? { ...r, damage: result } : r))
-  }
-
-  function changeSlot(lvl: number) {
-    setSelectedSlot(lvl)
-    setSingleHitRoll(null); setSingleDmgRoll(null)
-  }
-
-  function handleCast() {
-    onCast(selectedSlot)
-    onClose()
-  }
-
+  const schoolColor = SCHOOL_COLORS[spell.school] ?? 'bg-gray-100 text-gray-800 border-gray-300'
   const showSlotPicker = !isCantrip && !isPact && availableSlots.length > 1
+
+  function rollAll() {
+    // Re-narrow inside the closure — TS widens the captured prop back to Spell | null here.
+    const s = spell
+    if (!s) return
+    const attacks: DiceResult[] = []
+    const damages: DiceResult[] = []
+
+    if (isMultiHit && s.attackPerHit) {
+      // e.g. Scorching Ray — one attack + one damage per hit
+      for (let i = 0; i < nHits; i++) {
+        attacks.push(rollDice('1d20'))
+        if (s.damageDice) damages.push(rollDice(s.damageDice))
+      }
+    } else if (isMultiHit && !s.attackPerHit) {
+      // e.g. Magic Missile — one damage per dart, no attack
+      for (let i = 0; i < nHits; i++) {
+        if (s.damageDice) damages.push(rollDice(s.damageDice))
+      }
+    } else if (s.spellMechanic === 'attack' && singleDamageDice) {
+      // Single-hit attack (Fire Bolt etc.)
+      attacks.push(rollDice('1d20'))
+      damages.push(rollDice(singleDamageDice))
+    } else if (singleDamageDice) {
+      // Save or auto-hit damage (Fireball etc.)
+      damages.push(rollDice(singleDamageDice))
+    }
+
+    const heal = s.healDice ? rollDice(s.healDice) : null
+    setResult({ attacks, damages, heal })
+  }
+
+  const hasRollable =
+    spell.spellMechanic !== 'utility' ||
+    !!spell.damageDice ||
+    !!spell.healDice
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
@@ -120,8 +119,11 @@ export function CastRoller({
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Cast at level</p>
               <div className="flex flex-wrap gap-1.5">
                 {availableSlots.map(lvl => (
-                  <Button key={lvl} size="sm" variant={selectedSlot === lvl ? 'default' : 'outline'}
-                    className="h-7 text-xs" onClick={() => changeSlot(lvl)}>
+                  <Button key={lvl} size="sm"
+                    variant={selectedSlot === lvl ? 'default' : 'outline'}
+                    className="h-7 text-xs"
+                    onClick={() => setSelectedSlot(lvl)}
+                  >
                     {LEVEL_LABELS[lvl]}
                   </Button>
                 ))}
@@ -131,175 +133,171 @@ export function CastRoller({
           </>
         )}
 
-        <div className="space-y-4">
-
-          {/* ── Multi-hit attack (Scorching Ray etc.) ── */}
-          {isMultiHit && spell.attackPerHit && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">
-                {nHits} {spell.attackType === 'melee' ? 'Melee' : 'Ranged'} Attacks
-                {slotsAbove > 0 && spell.hitsScaleWithLevel && (
-                  <span className="text-muted-foreground font-normal text-xs ml-2">(+{slotsAbove} from upcast)</span>
-                )}
-              </p>
-              <div className="space-y-2">
-                {perHitResults.map((hit, i) => (
-                  <div key={i} className="flex items-center gap-2 flex-wrap p-2 rounded-md bg-muted/40">
-                    <span className="text-xs text-muted-foreground w-10 shrink-0">Hit {i + 1}</span>
-                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                      onClick={() => rollPerHitAttack(i)}>
-                      <Dices className="h-3 w-3" /> d20
-                    </Button>
-                    {hit.attack && (
-                      <>
-                        <span className="text-xs">
-                          <span className="font-mono">{hit.attack.total}</span>
-                          <span className="text-muted-foreground"> {formatMod(spellAttackBonus)} = </span>
-                          <span className="font-semibold">{hit.attack.total + spellAttackBonus}</span>
-                        </span>
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                          onClick={() => rollPerHitDamage(i)}>
-                          <Dices className="h-3 w-3" /> {spell.damageDice}
-                        </Button>
-                        {hit.damage && (
-                          <span className="font-bold">{hit.damage.total}
-                            {spell.damageType && <span className="text-muted-foreground font-normal text-xs ml-1">{spell.damageType}</span>}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Multi-hit auto-hit (Magic Missile etc.) ── */}
-          {isMultiHit && !spell.attackPerHit && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">
-                {nHits} darts — auto-hits
-                {slotsAbove > 0 && spell.hitsScaleWithLevel && (
-                  <span className="text-muted-foreground font-normal text-xs ml-2">(+{slotsAbove} from upcast)</span>
-                )}
-              </p>
-              <p className="text-xs text-muted-foreground">{spell.damageDice} per dart{spell.damageType && ` (${spell.damageType})`}</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{multiAutoHitExpression()}</span>
-                <Button size="sm" variant="outline" className="h-8 gap-1.5"
-                  onClick={() => { const expr = multiAutoHitExpression(); if (expr) setSingleDmgRoll(rollDice(expr)) }}>
-                  <Dices className="h-3.5 w-3.5" /> Roll all
-                </Button>
-                {singleDmgRoll && (
-                  <div className="text-sm">
-                    <span className="font-bold text-lg">{singleDmgRoll.total}</span>
-                    {singleDmgRoll.rolls.length > 1 && (
-                      <span className="text-muted-foreground text-xs ml-1">({singleDmgRoll.rolls.join(', ')})</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── Single-hit attack ── */}
-          {!isMultiHit && spell.spellMechanic === 'attack' && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">
-                {spell.attackType === 'melee' ? 'Melee' : 'Ranged'} Spell Attack
-              </p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button size="sm" variant="outline" className="h-8 gap-1.5"
-                  onClick={() => setSingleHitRoll(rollDice('1d20'))}>
-                  <Dices className="h-3.5 w-3.5" /> Roll d20
-                </Button>
-                {singleHitRoll && (
-                  <span className="text-sm">
-                    <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{singleHitRoll.total}</span>
-                    <span className="text-muted-foreground ml-1">
-                      {formatMod(spellAttackBonus)} = <span className="font-semibold">{singleHitRoll.total + spellAttackBonus}</span>
-                    </span>
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── Save ── */}
-          {spell.spellMechanic === 'save' && (
-            <div className="space-y-1">
-              <p className="text-sm font-medium">{spell.saveAbility} Saving Throw</p>
-              <p className="text-muted-foreground text-xs">Target must beat:</p>
-              <p className="text-3xl font-bold text-primary">DC {spellSaveDC}</p>
-            </div>
-          )}
-
-          {/* ── Utility / auto-hit single ── */}
-          {!isMultiHit && (spell.spellMechanic === 'utility' || spell.spellMechanic === 'damage') && (
+        {/* Mechanic summary */}
+        <div className="space-y-1">
+          {spell.spellMechanic === 'attack' || (isMultiHit && spell.attackPerHit) ? (
             <p className="text-sm text-muted-foreground">
-              {spell.spellMechanic === 'damage' ? 'Automatically hits.' : 'No attack roll or saving throw.'}
+              {isMultiHit
+                ? `${nHits} ${spell.attackType === 'melee' ? 'melee' : 'ranged'} attacks`
+                : `${spell.attackType === 'melee' ? 'Melee' : 'Ranged'} spell attack`}
+              {slotsAbove > 0 && spell.hitsScaleWithLevel && (
+                <span className="ml-1 text-xs">(+{slotsAbove} from upcast)</span>
+              )}
+            </p>
+          ) : spell.spellMechanic === 'save' ? (
+            <div className="flex items-baseline gap-3">
+              <span className="text-sm text-muted-foreground">{spell.saveAbility} save — DC</span>
+              <span className="text-2xl font-bold text-primary">{spellSaveDC}</span>
+            </div>
+          ) : isMultiHit ? (
+            <p className="text-sm text-muted-foreground">
+              {nHits} auto-hit darts
+              {slotsAbove > 0 && spell.hitsScaleWithLevel && <span className="ml-1 text-xs">(+{slotsAbove})</span>}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {spell.spellMechanic === 'damage' ? 'Automatically hits' : 'Utility — no attack or save'}
             </p>
           )}
 
-          {/* ── Single-hit damage ── */}
-          {!isMultiHit && singleDamageDice && (
-            <>
-              <Separator />
-              <div className="space-y-2">
-                <p className="text-sm font-medium">
-                  Damage
-                  {spell.damageType && <span className="text-muted-foreground font-normal ml-1">({spell.damageType})</span>}
-                </p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{singleDamageDice}</span>
-                  <Button size="sm" variant="outline" className="h-8 gap-1.5"
-                    onClick={() => setSingleDmgRoll(rollDice(singleDamageDice))}>
-                    <Dices className="h-3.5 w-3.5" /> Roll
-                  </Button>
-                  {singleDmgRoll && (
-                    <div className="text-sm">
-                      <span className="font-bold text-lg">{singleDmgRoll.total}</span>
-                      {singleDmgRoll.rolls.length > 1 && (
-                        <span className="text-muted-foreground text-xs ml-1">({singleDmgRoll.rolls.join(', ')})</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* ── Healing ── */}
-          {spell.healDice && (
-            <>
-              <Separator />
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Healing</p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{spell.healDice}</span>
-                  <Button size="sm" variant="outline" className="h-8 gap-1.5"
-                    onClick={() => setSingleHealRoll(rollDice(spell.healDice!))}>
-                    <Dices className="h-3.5 w-3.5" /> Roll
-                  </Button>
-                  {singleHealRoll && (
-                    <div className="text-sm">
-                      <span className="font-bold text-lg">{singleHealRoll.total}</span>
-                      {singleHealRoll.rolls.length > 1 && (
-                        <span className="text-muted-foreground text-xs ml-1">({singleHealRoll.rolls.join(', ')})</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
+          {/* Dice summary line */}
+          {(spell.damageDice || spell.healDice) && (
+            <p className="text-xs text-muted-foreground">
+              {isMultiHit
+                ? `${spell.damageDice} per hit`
+                : singleDamageDice ?? spell.damageDice}
+              {spell.damageType && ` ${spell.damageType}`}
+              {spell.healDice && ` · ${spell.healDice} healing`}
+            </p>
           )}
         </div>
 
+        {/* Roll / Re-roll button */}
+        {hasRollable && (
+          <Button onClick={rollAll} className="w-full gap-2">
+            {result ? <RefreshCw className="h-4 w-4" /> : <Dices className="h-4 w-4" />}
+            {result ? 'Re-roll' : 'Roll'}
+          </Button>
+        )}
+
+        {/* Results table */}
+        {result && (
+          <div className="rounded-md border overflow-hidden text-sm">
+            {/* Multi-hit attack (Scorching Ray) */}
+            {result.attacks.length > 1 && (
+              <>
+                <div className="grid grid-cols-[2rem_1fr_1fr] bg-muted/60 px-3 py-1.5 text-xs font-medium text-muted-foreground border-b">
+                  <span>#</span><span>Attack</span>
+                  <span>Damage{spell.damageType ? ` (${spell.damageType})` : ''}</span>
+                </div>
+                {result.attacks.map((atk, i) => (
+                  <div key={i} className="grid grid-cols-[2rem_1fr_1fr] px-3 py-2 border-b last:border-0 items-center">
+                    <span className="text-muted-foreground text-xs">{i + 1}</span>
+                    <span>
+                      <span className="text-muted-foreground text-xs">{atk.total}{formatMod(spellAttackBonus)} = </span>
+                      <span className="font-semibold">{atk.total + spellAttackBonus}</span>
+                    </span>
+                    <span className="font-semibold">{result.damages[i]?.total ?? '—'}</span>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* Single-hit attack */}
+            {result.attacks.length === 1 && result.damages.length === 1 && (
+              <>
+                <div className="grid grid-cols-[5rem_1fr] bg-muted/60 px-3 py-1.5 text-xs font-medium text-muted-foreground border-b">
+                  <span></span><span>Result</span>
+                </div>
+                <div className="grid grid-cols-[5rem_1fr] px-3 py-2 border-b items-center">
+                  <span className="text-xs text-muted-foreground">Attack</span>
+                  <span>
+                    <span className="text-muted-foreground text-xs">{result.attacks[0].total}{formatMod(spellAttackBonus)} = </span>
+                    <span className="font-semibold">{result.attacks[0].total + spellAttackBonus}</span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-[5rem_1fr] px-3 py-2 items-center">
+                  <span className="text-xs text-muted-foreground">
+                    Damage{spell.damageType ? ` (${spell.damageType})` : ''}
+                  </span>
+                  <span>
+                    <span className="font-semibold text-base">{result.damages[0].total}</span>
+                    {result.damages[0].rolls.length > 1 && (
+                      <span className="text-muted-foreground text-xs ml-1.5">
+                        ({result.damages[0].rolls.join('+')})
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {/* Multi-hit auto-hit (Magic Missile) */}
+            {result.attacks.length === 0 && result.damages.length > 1 && (
+              <>
+                <div className="grid grid-cols-[2rem_1fr] bg-muted/60 px-3 py-1.5 text-xs font-medium text-muted-foreground border-b">
+                  <span>#</span>
+                  <span>Damage{spell.damageType ? ` (${spell.damageType})` : ''}</span>
+                </div>
+                {result.damages.map((dmg, i) => (
+                  <div key={i} className="grid grid-cols-[2rem_1fr] px-3 py-2 border-b items-center">
+                    <span className="text-muted-foreground text-xs">{i + 1}</span>
+                    <span className="font-semibold">{dmg.total}
+                      {dmg.rolls.length > 1 && (
+                        <span className="text-muted-foreground font-normal text-xs ml-1.5">({dmg.rolls.join('+')})</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+                <div className="grid grid-cols-[2rem_1fr] px-3 py-2 bg-muted/30 items-center">
+                  <span className="text-xs text-muted-foreground font-medium">∑</span>
+                  <span className="font-bold text-primary">
+                    {result.damages.reduce((s, d) => s + d.total, 0)}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {/* Save / single damage */}
+            {result.attacks.length === 0 && result.damages.length === 1 && (
+              <div className="px-3 py-2">
+                <span className="text-xs text-muted-foreground">
+                  Damage{spell.damageType ? ` (${spell.damageType})` : ''}{' — '}
+                </span>
+                <span className="font-bold text-base">{result.damages[0].total}</span>
+                {result.damages[0].rolls.length > 1 && (
+                  <span className="text-muted-foreground text-xs ml-1.5">
+                    ({result.damages[0].rolls.join('+')})
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Healing */}
+            {result.heal && (
+              <div className="px-3 py-2 border-t">
+                <span className="text-xs text-muted-foreground">Healing — </span>
+                <span className="font-bold text-base">{result.heal.total}</span>
+                {result.heal.rolls.length > 1 && (
+                  <span className="text-muted-foreground text-xs ml-1.5">
+                    ({result.heal.rolls.join('+')})
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <Separator />
-        <Button onClick={handleCast} className="w-full">
+        <Button variant="outline" onClick={handleCast} className="w-full">
           Confirm Cast{!isCantrip && ` (${LEVEL_LABELS[selectedSlot]})`}
         </Button>
       </DialogContent>
     </Dialog>
   )
+
+  function handleCast() {
+    onCast(selectedSlot)
+    onClose()
+  }
 }

@@ -27,6 +27,7 @@ export interface Spell {
   hitCount: number | null;        // null / 1 = single hit
   attackPerHit: boolean;          // each hit needs its own attack roll (e.g. Scorching Ray)
   hitsScaleWithLevel: boolean;    // +1 hit per slot level above base
+  cantripScaling: boolean;        // damage dice multiply at levels 5, 11, 17
 }
 
 export interface ClassData {
