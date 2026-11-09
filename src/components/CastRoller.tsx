@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Dices, RefreshCw } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Dices } from 'lucide-react'
+import { DialogLayout } from '@/components/dialog-layout'
+import { schoolColor } from '@/components/SpellFacts'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { RefreshCw } from '@/components/ui/icons'
+import { SegmentedButton, SegmentedGroup } from '@/components/ui/segmented'
 import { Separator } from '@/components/ui/separator'
-import { LEVEL_LABELS, SCHOOL_COLORS } from '@/lib/utils'
+import { LEVEL_LABELS } from '@/lib/spell-labels'
+import { cn } from '@/lib/utils'
 import { rollDice, upcastDice, scaleCantripDice, formatMod, type DiceResult } from '@/lib/stats'
 import type { Spell } from '@/types'
 
@@ -63,7 +67,6 @@ export function CastRoller({
       ? upcastDice(baseDamageDice, spell.higherLevelDice, slotsAbove)
       : baseDamageDice
 
-  const schoolColor = SCHOOL_COLORS[spell.school] ?? 'bg-gray-100 text-gray-800 border-gray-300'
   const showSlotPicker = !isCantrip && !isPact && availableSlots.length > 1
 
   function rollAll() {
@@ -103,31 +106,38 @@ export function CastRoller({
     !!spell.healDice
 
   return (
-    <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 flex-wrap">
-            {spell.name}
-            <Badge className={`border text-xs ${schoolColor}`}>{LEVEL_LABELS[spell.level]}</Badge>
-          </DialogTitle>
-        </DialogHeader>
+    <DialogLayout
+      open={open}
+      onOpenChange={o => { if (!o) onClose() }}
+      size="sm"
+      title={spell.name}
+      actionSlot={<Badge className={cn('border', schoolColor(spell))}>{LEVEL_LABELS[spell.level]}</Badge>}
+      actionPlacement="inline"
+      footerActionsSlot={
+        <Button
+          variant="positive"
+          content={`Confirm Cast${isCantrip ? '' : ` (${LEVEL_LABELS[selectedSlot]})`}`}
+          onClick={handleCast}
+        />
+      }
+      contentSlot={<>
 
         {/* Slot picker */}
         {showSlotPicker && (
           <>
             <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Cast at level</p>
-              <div className="flex flex-wrap gap-1.5">
+              <p id="cast-level" className="text-xs text-foreground/60 uppercase tracking-wide">Cast at level</p>
+              <SegmentedGroup
+                aria-labelledby="cast-level"
+                variant="plain"
+                className="flex-wrap"
+                value={String(selectedSlot)}
+                onValueChange={v => setSelectedSlot(Number(v))}
+              >
                 {availableSlots.map(lvl => (
-                  <Button key={lvl} size="sm"
-                    variant={selectedSlot === lvl ? 'default' : 'outline'}
-                    className="h-7 text-xs"
-                    onClick={() => setSelectedSlot(lvl)}
-                  >
-                    {LEVEL_LABELS[lvl]}
-                  </Button>
+                  <SegmentedButton key={lvl} value={String(lvl)}>{LEVEL_LABELS[lvl]}</SegmentedButton>
                 ))}
-              </div>
+              </SegmentedGroup>
             </div>
             <Separator />
           </>
@@ -136,7 +146,7 @@ export function CastRoller({
         {/* Mechanic summary */}
         <div className="space-y-1">
           {spell.spellMechanic === 'attack' || (isMultiHit && spell.attackPerHit) ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-foreground/60">
               {isMultiHit
                 ? `${nHits} ${spell.attackType === 'melee' ? 'melee' : 'ranged'} attacks`
                 : `${spell.attackType === 'melee' ? 'Melee' : 'Ranged'} spell attack`}
@@ -146,23 +156,23 @@ export function CastRoller({
             </p>
           ) : spell.spellMechanic === 'save' ? (
             <div className="flex items-baseline gap-3">
-              <span className="text-sm text-muted-foreground">{spell.saveAbility} save — DC</span>
-              <span className="text-2xl font-bold text-primary">{spellSaveDC}</span>
+              <span className="text-sm text-foreground/60">{spell.saveAbility} save — DC</span>
+              <span className="text-2xl font-bold text-active">{spellSaveDC}</span>
             </div>
           ) : isMultiHit ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-foreground/60">
               {nHits} auto-hit darts
               {slotsAbove > 0 && spell.hitsScaleWithLevel && <span className="ml-1 text-xs">(+{slotsAbove})</span>}
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-foreground/60">
               {spell.spellMechanic === 'damage' ? 'Automatically hits' : 'Utility — no attack or save'}
             </p>
           )}
 
           {/* Dice summary line */}
           {(spell.damageDice || spell.healDice) && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-foreground/60">
               {isMultiHit
                 ? `${spell.damageDice} per hit`
                 : singleDamageDice ?? spell.damageDice}
@@ -174,27 +184,29 @@ export function CastRoller({
 
         {/* Roll / Re-roll button */}
         {hasRollable && (
-          <Button onClick={rollAll} className="w-full gap-2">
-            {result ? <RefreshCw className="h-4 w-4" /> : <Dices className="h-4 w-4" />}
-            {result ? 'Re-roll' : 'Roll'}
-          </Button>
+          <Button
+            className="w-full"
+            iconSlot={result ? <RefreshCw /> : <Dices />}
+            content={result ? 'Re-roll' : 'Roll'}
+            onClick={rollAll}
+          />
         )}
 
         {/* Results table */}
         {result && (
-          <div className="rounded-md border overflow-hidden text-sm">
+          <div className="rounded-md border border-foreground/10 overflow-hidden text-sm">
             {/* Multi-hit attack (Scorching Ray) */}
             {result.attacks.length > 1 && (
               <>
-                <div className="grid grid-cols-[2rem_1fr_1fr] bg-muted/60 px-3 py-1.5 text-xs font-medium text-muted-foreground border-b">
+                <div className="grid grid-cols-[2rem_1fr_1fr] bg-secondary px-3 py-1.5 text-xs font-medium text-foreground/60 border-b border-foreground/10">
                   <span>#</span><span>Attack</span>
                   <span>Damage{spell.damageType ? ` (${spell.damageType})` : ''}</span>
                 </div>
                 {result.attacks.map((atk, i) => (
-                  <div key={i} className="grid grid-cols-[2rem_1fr_1fr] px-3 py-2 border-b last:border-0 items-center">
-                    <span className="text-muted-foreground text-xs">{i + 1}</span>
+                  <div key={i} className="grid grid-cols-[2rem_1fr_1fr] px-3 py-2 border-b border-foreground/10 last:border-0 items-center">
+                    <span className="text-foreground/60 text-xs">{i + 1}</span>
                     <span>
-                      <span className="text-muted-foreground text-xs">{atk.total}{formatMod(spellAttackBonus)} = </span>
+                      <span className="text-foreground/60 text-xs">{atk.total}{formatMod(spellAttackBonus)} = </span>
                       <span className="font-semibold">{atk.total + spellAttackBonus}</span>
                     </span>
                     <span className="font-semibold">{result.damages[i]?.total ?? '—'}</span>
@@ -206,24 +218,24 @@ export function CastRoller({
             {/* Single-hit attack */}
             {result.attacks.length === 1 && result.damages.length === 1 && (
               <>
-                <div className="grid grid-cols-[5rem_1fr] bg-muted/60 px-3 py-1.5 text-xs font-medium text-muted-foreground border-b">
+                <div className="grid grid-cols-[5rem_1fr] bg-secondary px-3 py-1.5 text-xs font-medium text-foreground/60 border-b border-foreground/10">
                   <span></span><span>Result</span>
                 </div>
-                <div className="grid grid-cols-[5rem_1fr] px-3 py-2 border-b items-center">
-                  <span className="text-xs text-muted-foreground">Attack</span>
+                <div className="grid grid-cols-[5rem_1fr] px-3 py-2 border-b border-foreground/10 items-center">
+                  <span className="text-xs text-foreground/60">Attack</span>
                   <span>
-                    <span className="text-muted-foreground text-xs">{result.attacks[0].total}{formatMod(spellAttackBonus)} = </span>
+                    <span className="text-foreground/60 text-xs">{result.attacks[0].total}{formatMod(spellAttackBonus)} = </span>
                     <span className="font-semibold">{result.attacks[0].total + spellAttackBonus}</span>
                   </span>
                 </div>
                 <div className="grid grid-cols-[5rem_1fr] px-3 py-2 items-center">
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-foreground/60">
                     Damage{spell.damageType ? ` (${spell.damageType})` : ''}
                   </span>
                   <span>
                     <span className="font-semibold text-base">{result.damages[0].total}</span>
                     {result.damages[0].rolls.length > 1 && (
-                      <span className="text-muted-foreground text-xs ml-1.5">
+                      <span className="text-foreground/60 text-xs ml-1.5">
                         ({result.damages[0].rolls.join('+')})
                       </span>
                     )}
@@ -235,23 +247,23 @@ export function CastRoller({
             {/* Multi-hit auto-hit (Magic Missile) */}
             {result.attacks.length === 0 && result.damages.length > 1 && (
               <>
-                <div className="grid grid-cols-[2rem_1fr] bg-muted/60 px-3 py-1.5 text-xs font-medium text-muted-foreground border-b">
+                <div className="grid grid-cols-[2rem_1fr] bg-secondary px-3 py-1.5 text-xs font-medium text-foreground/60 border-b border-foreground/10">
                   <span>#</span>
                   <span>Damage{spell.damageType ? ` (${spell.damageType})` : ''}</span>
                 </div>
                 {result.damages.map((dmg, i) => (
-                  <div key={i} className="grid grid-cols-[2rem_1fr] px-3 py-2 border-b items-center">
-                    <span className="text-muted-foreground text-xs">{i + 1}</span>
+                  <div key={i} className="grid grid-cols-[2rem_1fr] px-3 py-2 border-b border-foreground/10 items-center">
+                    <span className="text-foreground/60 text-xs">{i + 1}</span>
                     <span className="font-semibold">{dmg.total}
                       {dmg.rolls.length > 1 && (
-                        <span className="text-muted-foreground font-normal text-xs ml-1.5">({dmg.rolls.join('+')})</span>
+                        <span className="text-foreground/60 font-normal text-xs ml-1.5">({dmg.rolls.join('+')})</span>
                       )}
                     </span>
                   </div>
                 ))}
-                <div className="grid grid-cols-[2rem_1fr] px-3 py-2 bg-muted/30 items-center">
-                  <span className="text-xs text-muted-foreground font-medium">∑</span>
-                  <span className="font-bold text-primary">
+                <div className="grid grid-cols-[2rem_1fr] px-3 py-2 bg-secondary items-center">
+                  <span className="text-xs text-foreground/60 font-medium">∑</span>
+                  <span className="font-bold text-active">
                     {result.damages.reduce((s, d) => s + d.total, 0)}
                   </span>
                 </div>
@@ -261,12 +273,12 @@ export function CastRoller({
             {/* Save / single damage */}
             {result.attacks.length === 0 && result.damages.length === 1 && (
               <div className="px-3 py-2">
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-foreground/60">
                   Damage{spell.damageType ? ` (${spell.damageType})` : ''}{' — '}
                 </span>
                 <span className="font-bold text-base">{result.damages[0].total}</span>
                 {result.damages[0].rolls.length > 1 && (
-                  <span className="text-muted-foreground text-xs ml-1.5">
+                  <span className="text-foreground/60 text-xs ml-1.5">
                     ({result.damages[0].rolls.join('+')})
                   </span>
                 )}
@@ -275,11 +287,11 @@ export function CastRoller({
 
             {/* Healing */}
             {result.heal && (
-              <div className="px-3 py-2 border-t">
-                <span className="text-xs text-muted-foreground">Healing — </span>
+              <div className="px-3 py-2 border-t border-foreground/10">
+                <span className="text-xs text-foreground/60">Healing — </span>
                 <span className="font-bold text-base">{result.heal.total}</span>
                 {result.heal.rolls.length > 1 && (
-                  <span className="text-muted-foreground text-xs ml-1.5">
+                  <span className="text-foreground/60 text-xs ml-1.5">
                     ({result.heal.rolls.join('+')})
                   </span>
                 )}
@@ -288,12 +300,8 @@ export function CastRoller({
           </div>
         )}
 
-        <Separator />
-        <Button variant="outline" onClick={handleCast} className="w-full">
-          Confirm Cast{!isCantrip && ` (${LEVEL_LABELS[selectedSlot]})`}
-        </Button>
-      </DialogContent>
-    </Dialog>
+      </>}
+    />
   )
 
   function handleCast() {

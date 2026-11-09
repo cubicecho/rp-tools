@@ -1,8 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
-import { BookOpen, Wand2, Swords, UserCircle, ScrollText } from 'lucide-react'
+import { useState, useEffect, useMemo, type ReactNode } from 'react'
+import { BookOpen, WandSparkles, Swords, CircleUser, ScrollText } from 'lucide-react'
+import { HeaderContentFooter, PAGE_COLUMN } from '@/components/header-content-footer'
+import { EmptyState } from '@/components/empty-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
+import { SegmentedButton, SegmentedGroup } from '@/components/ui/segmented'
+import { useThemePreference } from '@/components/ui/theme-preference'
 import { SpellSlotTracker } from '@/components/SpellSlotTracker'
 import { SpellBrowser } from '@/components/SpellBrowser'
 import { MySpells } from '@/components/MySpells'
@@ -17,6 +20,9 @@ import type { ClassData } from '@/types'
 type View = 'manage' | 'play' | 'reference'
 
 export default function App() {
+  // Follows the OS between light and dark, and applies a stored choice if one is ever made.
+  useThemePreference()
+
   const [classes, setClasses] = useState<ClassData[]>([])
   const [view, setView] = useState<View>('play')
   const [mobilePanel, setMobilePanel] = useState<'mine' | 'browse'>('mine')
@@ -46,118 +52,105 @@ export default function App() {
 
   const dc = currentClass ? spellSaveDC(character.level, character.classId, character.stats) : null
   const atk = currentClass ? spellAttackBonus(character.level, character.classId, character.stats) : null
+  const openSheet = () => setSheetOpen(true)
+  const goToManage = () => setView('manage')
 
-  return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="border-b bg-card px-4 py-3 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex flex-col gap-3">
-          {/* Top row */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 shrink-0">
-              <Wand2 className="h-5 w-5 text-primary" />
-              <h1 className="font-semibold text-base">Spell Manager</h1>
-              <Badge variant="outline" className="text-xs">5.5e</Badge>
-            </div>
-
-            {/* View toggle */}
-            <div className="flex rounded-md border border-border overflow-hidden">
-              <Button
-                variant={view === 'manage' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-7 px-3 text-xs rounded-none border-0"
-                onClick={() => setView('manage')}
-              >
-                <BookOpen className="h-3.5 w-3.5 mr-1.5" />
-                Manage
-              </Button>
-              <div className="w-px bg-border" />
-              <Button
-                variant={view === 'play' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-7 px-3 text-xs rounded-none border-0"
-                onClick={() => setView('play')}
-              >
-                <Swords className="h-3.5 w-3.5 mr-1.5" />
-                Play
-              </Button>
-              <div className="w-px bg-border" />
-              <Button
-                variant={view === 'reference' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-7 px-3 text-xs rounded-none border-0"
-                onClick={() => setView('reference')}
-              >
-                <ScrollText className="h-3.5 w-3.5 mr-1.5" />
-                Reference
-              </Button>
-            </div>
-
-            {/* Spellcasting summary + character button */}
-            <div className="flex items-center gap-2 ml-auto flex-wrap">
-              {currentClass && dc !== null && atk !== null && (
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span>
-                    <span className="text-muted-foreground">DC </span>
-                    <span className="font-semibold text-foreground">{dc}</span>
-                  </span>
-                  <span>
-                    <span className="text-muted-foreground">Atk </span>
-                    <span className="font-semibold text-foreground">{formatMod(atk)}</span>
-                  </span>
-                  <span className="text-muted-foreground">
-                    {currentClass.name} {character.level}
-                  </span>
-                </div>
-              )}
-              <Button
-                variant={character.classId ? 'outline' : 'default'}
-                size="sm"
-                className="h-7 px-2 gap-1.5 text-xs"
-                onClick={() => setSheetOpen(true)}
-              >
-                <UserCircle className="h-3.5 w-3.5" />
-                {character.classId ? 'Character' : 'Set up character'}
-              </Button>
-            </div>
-          </div>
-
-          {/* Spell slot tracker */}
-          {currentClass && (
-            <SpellSlotTracker
-              character={character}
-              currentClass={currentClass}
-              onShortRest={doShortRest}
-              onLongRest={doLongRest}
-            />
-          )}
+  const header = (
+    <div className={`${PAGE_COLUMN} flex flex-col gap-3 py-3`}>
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 shrink-0">
+          <WandSparkles className="h-5 w-5 text-active" aria-hidden />
+          <h1 className="font-semibold text-base">Spell Manager</h1>
+          <Badge variant="outline">5.5e</Badge>
         </div>
-      </header>
 
-      {/* Main */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-4">
-        {!character.classId ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-            <Wand2 className="h-12 w-12 text-muted-foreground" />
-            <h2 className="text-lg font-medium">Choose a class to get started</h2>
-            <p className="text-sm text-muted-foreground">
-              Click <strong>Set up character</strong> in the header.
-            </p>
-          </div>
-        ) : view === 'reference' ? (
-          loading ? (
-            <p className="text-sm text-muted-foreground">Loading spells…</p>
-          ) : (
-            <ReferenceView
-              knownSpells={character.knownSpells}
-              spellById={byId}
+        <SegmentedGroup aria-label="View" labelHideBelow="sm" value={view} onValueChange={setView}>
+          <SegmentedButton value="manage" iconSlot={<BookOpen />}>Manage</SegmentedButton>
+          <SegmentedButton value="play" iconSlot={<Swords />}>Play</SegmentedButton>
+          <SegmentedButton value="reference" iconSlot={<ScrollText />}>Reference</SegmentedButton>
+        </SegmentedGroup>
+
+        <div className="flex items-center gap-2 ml-auto flex-wrap">
+          {currentClass && dc !== null && atk !== null && (
+            <div className="flex items-center gap-3 text-xs text-foreground/60">
+              <span>
+                DC <span className="font-semibold text-foreground">{dc}</span>
+              </span>
+              <span>
+                Atk <span className="font-semibold text-foreground">{formatMod(atk)}</span>
+              </span>
+              <span>
+                {currentClass.name} {character.level}
+              </span>
+            </div>
+          )}
+          <Button
+            variant={character.classId ? 'outline' : 'default'}
+            size="sm"
+            iconSlot={<CircleUser />}
+            content={character.classId ? 'Character' : 'Set up character'}
+            onClick={openSheet}
+          />
+        </div>
+      </div>
+
+      {currentClass && (
+        <SpellSlotTracker
+          character={character}
+          currentClass={currentClass}
+          onShortRest={doShortRest}
+          onLongRest={doLongRest}
+        />
+      )}
+    </div>
+  )
+
+  let body: ReactNode
+  if (!character.classId) {
+    body = (
+      <EmptyState
+        level={2}
+        iconSlot={<WandSparkles />}
+        title="Choose a class to get started"
+        description="Pick a class and a level, and the spells it can learn are listed for you."
+        actionSlot={<Button iconSlot={<CircleUser />} content="Set up character" onClick={openSheet} />}
+      />
+    )
+  } else if (loading) {
+    body = <p className="text-sm text-foreground/60">Loading spells…</p>
+  } else if (view === 'reference') {
+    body = <ReferenceView knownSpells={character.knownSpells} spellById={byId} onManage={goToManage} />
+  } else if (view === 'play') {
+    body = (
+      <PlayView
+        knownSpells={character.knownSpells}
+        spellById={byId}
+        character={character}
+        currentClass={currentClass}
+        onTogglePrepared={togglePrepared}
+        onCast={castSpell}
+        onRemove={removeSpell}
+        onManage={goToManage}
+      />
+    )
+  } else {
+    body = (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section aria-labelledby="my-spells-heading" className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 border-b border-foreground/10 pb-2">
+            <BookOpen className="h-4 w-4 text-active" aria-hidden />
+            <h2 id="my-spells-heading" className="font-semibold text-sm">My Spells</h2>
+            <Badge variant="secondary">{character.knownSpells.length}</Badge>
+            <Button
+              variant="outline"
+              size="xs"
+              className="lg:hidden ml-auto"
+              content={mobilePanel === 'mine' ? 'Browse →' : '← My Spells'}
+              onClick={() => setMobilePanel(mobilePanel === 'mine' ? 'browse' : 'mine')}
             />
-          )
-        ) : view === 'play' ? (
-          loading ? (
-            <p className="text-sm text-muted-foreground">Loading spells…</p>
-          ) : (
-            <PlayView
+          </div>
+          <div className={mobilePanel === 'mine' ? 'block' : 'hidden lg:block'}>
+            <MySpells
               knownSpells={character.knownSpells}
               spellById={byId}
               character={character}
@@ -166,61 +159,36 @@ export default function App() {
               onCast={castSpell}
               onRemove={removeSpell}
             />
-          )
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-primary" />
-                <h2 className="font-semibold text-sm">My Spells</h2>
-                <Badge variant="secondary" className="text-xs">{character.knownSpells.length}</Badge>
-                <button
-                  className="lg:hidden ml-auto text-xs text-primary underline"
-                  onClick={() => setMobilePanel(mobilePanel === 'mine' ? 'browse' : 'mine')}
-                >
-                  {mobilePanel === 'mine' ? 'Browse →' : '← My Spells'}
-                </button>
-              </div>
-              <Separator />
-              <div className={mobilePanel === 'mine' ? 'block' : 'hidden lg:block'}>
-                {loading ? (
-                  <p className="text-sm text-muted-foreground">Loading spells…</p>
-                ) : (
-                  <MySpells
-                    knownSpells={character.knownSpells}
-                    spellById={byId}
-                    character={character}
-                    currentClass={currentClass}
-                    onTogglePrepared={togglePrepared}
-                    onCast={castSpell}
-                    onRemove={removeSpell}
-                  />
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <Wand2 className="h-4 w-4 text-primary" />
-                <h2 className="font-semibold text-sm">{currentClass?.name} Spells</h2>
-              </div>
-              <Separator />
-              <div className={mobilePanel === 'browse' ? 'block' : 'hidden lg:block'}>
-                {loading ? (
-                  <p className="text-sm text-muted-foreground">Loading spells…</p>
-                ) : (
-                  <SpellBrowser
-                    spells={spells}
-                    knownIds={knownIds}
-                    classId={character.classId}
-                    onAdd={addSpell}
-                  />
-                )}
-              </div>
-            </div>
           </div>
-        )}
-      </main>
+        </section>
+
+        <section aria-labelledby="class-spells-heading" className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 border-b border-foreground/10 pb-2">
+            <WandSparkles className="h-4 w-4 text-active" aria-hidden />
+            <h2 id="class-spells-heading" className="font-semibold text-sm">{currentClass?.name} Spells</h2>
+          </div>
+          <div className={mobilePanel === 'browse' ? 'block' : 'hidden lg:block'}>
+            <SpellBrowser spells={spells} knownIds={knownIds} classId={character.classId} onAdd={addSpell} />
+          </div>
+        </section>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {/* The header stays put and the body scrolls under it, so no list has to guess the
+          header's height with a calc(100vh - …) of its own. */}
+      <HeaderContentFooter
+        scroll
+        className="h-full"
+        width="page"
+        headerWidth="full"
+        headerClassName="border-b border-foreground/10 bg-card px-4"
+        headerSlot={header}
+        contentClassName="py-4"
+        contentSlot={<main>{body}</main>}
+      />
 
       <CharacterSheet
         open={sheetOpen}
@@ -231,6 +199,6 @@ export default function App() {
         onSetLevel={setLevel}
         onUpdateStats={updateStats}
       />
-    </div>
+    </>
   )
 }
