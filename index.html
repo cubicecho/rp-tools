@@ -11,6 +11,9 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <title>Spell Manager — D&D 5.5e</title>
+    <!-- Before first paint, so the page never flashes the wrong theme: the light/dark half of cubeui's
+         THEME_PRE_PAINT_SCRIPT (src/components/ui/theme-preference-base.ts). Keep it in step. -->
+    <script>(function(){try{var p=localStorage.getItem("cubeui-theme"),d=p==="dark"||(p!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches),c=document.documentElement.classList;c.toggle("dark",d);c.toggle("light",p==="light")}catch(e){}})();</script>
   </head>
   <body>
     <div id="root"></div>

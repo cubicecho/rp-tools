@@ -1,11 +1,13 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Combobox } from '@/components/combobox'
+import { DialogLayout } from '@/components/dialog-layout'
+import { FormField } from '@/components/form-field'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import {
   ABILITY_LABELS, abilityMod, formatMod, proficiencyBonus,
   spellcastingKey, spellSaveDC, spellAttackBonus,
 } from '@/lib/stats'
+import { cn } from '@/lib/utils'
 import type { ClassData, AbilityScores, Character } from '@/types'
 
 interface CharacterSheetProps {
@@ -18,7 +20,16 @@ interface CharacterSheetProps {
   onUpdateStats: (patch: Partial<AbilityScores>) => void
 }
 
-const LEVEL_OPTIONS = Array.from({ length: 20 }, (_, i) => i + 1)
+/** The full names, read out in place of the STR / DEX abbreviations on screen. */
+const ABILITY_NAMES: Record<keyof AbilityScores, string> = {
+  str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma',
+}
+
+const LEVEL_OPTIONS = Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: `Level ${i + 1}` }))
+
+function SectionTitle({ id, children }: { id?: string; children: string }) {
+  return <h3 id={id} className="text-xs text-foreground/60 uppercase tracking-wide">{children}</h3>
+}
 
 export function CharacterSheet({
   open, onClose, character, classes, onSetClass, onSetLevel, onUpdateStats,
@@ -29,105 +40,111 @@ export function CharacterSheet({
   const dc = spellSaveDC(character.level, character.classId, character.stats)
   const atk = spellAttackBonus(character.level, character.classId, character.stats)
   const currentClass = classes.find(c => c.id === character.classId)
+  const classOptions = classes.map(c => ({ value: c.id, label: c.name }))
 
   const abilities = Object.keys(ABILITY_LABELS) as (keyof AbilityScores)[]
 
+  // Every change is saved as it is made, so there is nothing to submit: the dialog only closes.
   return (
-    <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Character</DialogTitle>
-        </DialogHeader>
-
-        {/* Class + Level */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground uppercase tracking-wide">Class</label>
-            <Select value={character.classId || ''} onValueChange={v => onSetClass(v, character.edition)}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Pick class…" />
-              </SelectTrigger>
-              <SelectContent>
-                {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+    <DialogLayout
+      open={open}
+      onOpenChange={o => { if (!o) onClose() }}
+      title="Character"
+      size="md"
+      contentSlot={
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              label="Class"
+              controlSlot={props => (
+                <Combobox
+                  {...props}
+                  options={classOptions}
+                  value={character.classId || undefined}
+                  placeholder="Pick class…"
+                  onValueChange={v => onSetClass(v, character.edition)}
+                />
+              )}
+            />
+            <FormField
+              label="Level"
+              controlSlot={props => (
+                <Combobox
+                  {...props}
+                  options={LEVEL_OPTIONS}
+                  value={String(character.level)}
+                  onValueChange={v => onSetLevel(Number(v))}
+                />
+              )}
+            />
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground uppercase tracking-wide">Level</label>
-            <Select value={String(character.level)} onValueChange={v => onSetLevel(Number(v))}>
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {LEVEL_OPTIONS.map(l => <SelectItem key={l} value={String(l)}>Level {l}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
 
-        <Separator />
+          <Separator />
 
-        {/* Ability scores */}
-        <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Ability Scores</p>
-          <div className="grid grid-cols-3 gap-2">
-            {abilities.map(key => {
-              const mod = abilityMod(character.stats[key])
-              const isSpellcastingAbility = character.classId && castKey === key
-              return (
-                <div
-                  key={key}
-                  className={`flex flex-col items-center gap-1 rounded-md border p-2 ${isSpellcastingAbility ? 'border-primary/50 bg-primary/5' : ''}`}
-                >
-                  <span className="text-[10px] text-muted-foreground font-medium">
-                    {ABILITY_LABELS[key]}
-                  </span>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={character.stats[key]}
-                    onChange={e => onUpdateStats({ [key]: Math.min(30, Math.max(1, Number(e.target.value))) })}
-                    className="h-8 w-full text-center text-sm p-1"
+          <section aria-labelledby="ability-scores" className="flex flex-col gap-2">
+            <SectionTitle id="ability-scores">Ability Scores</SectionTitle>
+            <div className="grid grid-cols-3 gap-2">
+              {abilities.map(key => {
+                const isSpellcastingAbility = character.classId !== '' && castKey === key
+                return (
+                  <FormField
+                    key={key}
+                    className={cn('rounded-md border border-foreground/10 p-2 text-center', isSpellcastingAbility && 'border-active bg-active/10')}
+                    label={
+                      <>
+                        <span aria-hidden>{ABILITY_LABELS[key]}</span>
+                        <span className="sr-only">{ABILITY_NAMES[key]}</span>
+                      </>
+                    }
+                    labelClassName="justify-center"
+                    description={`Modifier ${formatMod(abilityMod(character.stats[key]))}`}
+                    controlSlot={
+                      <Input
+                        type="number"
+                        min={1}
+                        max={30}
+                        className="text-center"
+                        value={String(character.stats[key])}
+                        onChangeText={v => onUpdateStats({ [key]: Math.min(30, Math.max(1, Number(v))) })}
+                      />
+                    }
                   />
-                  <span className="text-xs font-semibold">{formatMod(mod)}</span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Spellcasting stats */}
-        {currentClass ? (
-          <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Spellcasting</p>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Ability</span>
-                <span className="font-medium">
-                  {ABILITY_LABELS[castKey]} ({formatMod(castMod)})
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Proficiency</span>
-                <span className="font-medium">{formatMod(prof)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Save DC</span>
-                <span className="font-semibold text-primary">{dc}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Attack Bonus</span>
-                <span className="font-semibold text-primary">{formatMod(atk)}</span>
-              </div>
+                )
+              })}
             </div>
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">Select a class to see spellcasting stats.</p>
-        )}
-      </DialogContent>
-    </Dialog>
+          </section>
+
+          <Separator />
+
+          {currentClass ? (
+            <section className="flex flex-col gap-2">
+              <SectionTitle>Spellcasting</SectionTitle>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-foreground/60">Ability</span>
+                  <span className="font-medium">
+                    {ABILITY_LABELS[castKey]} ({formatMod(castMod)})
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-foreground/60">Proficiency</span>
+                  <span className="font-medium">{formatMod(prof)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-foreground/60">Save DC</span>
+                  <span className="font-semibold text-active">{dc}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-foreground/60">Attack Bonus</span>
+                  <span className="font-semibold text-active">{formatMod(atk)}</span>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <p className="text-xs text-foreground/60">Select a class to see spellcasting stats.</p>
+          )}
+        </>
+      }
+    />
   )
 }

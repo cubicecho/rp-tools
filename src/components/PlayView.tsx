@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Combobox } from '@/components/combobox'
+import { EmptyState } from '@/components/empty-state'
+import { SearchInput } from '@/components/ui/search-input'
+import { ToggleChip } from '@/components/ui/toggle-chip'
 import { SpellCard } from '@/components/SpellCard'
 import { SpellDetail } from '@/components/SpellDetail'
+import { NoSpellsYet } from '@/components/NoSpellsYet'
 import { getPactSlotLevel } from '@/lib/spellSlots'
 import { spellSaveDC, spellAttackBonus } from '@/lib/stats'
-import { LEVEL_LABELS } from '@/lib/utils'
+import { levelOptions } from '@/lib/spell-labels'
 import type { Spell, KnownSpell, ClassData, Character } from '@/types'
 
 interface PlayViewProps {
@@ -18,6 +19,8 @@ interface PlayViewProps {
   onTogglePrepared: (spellId: string) => void
   onCast: (slotLevel: number) => void
   onRemove: (spellId: string) => void
+  /** Switches to the Manage view, where spells are added. */
+  onManage: () => void
 }
 
 export function PlayView({
@@ -28,6 +31,7 @@ export function PlayView({
   onTogglePrepared,
   onCast,
   onRemove,
+  onManage,
 }: PlayViewProps) {
   const [search, setSearch] = useState('')
   const [levelFilter, setLevelFilter] = useState('all')
@@ -46,10 +50,7 @@ export function PlayView({
     [knownSpells, spellById]
   )
 
-  const availableLevels = useMemo(() => {
-    const levels = new Set(resolved.map(x => x.spell.level))
-    return Array.from(levels).sort((a, b) => a - b)
-  }, [resolved])
+  const levels = useMemo(() => levelOptions(resolved.map(x => x.spell.level)), [resolved])
 
   const filtered = useMemo(() => {
     return resolved.filter(({ ks, spell }) => {
@@ -61,49 +62,31 @@ export function PlayView({
   }, [resolved, search, levelFilter, preparedOnly])
 
   if (knownSpells.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-2 text-center">
-        <p className="text-muted-foreground text-sm">No spells in your spell book yet.</p>
-        <p className="text-muted-foreground text-xs">Switch to Manage to add spells.</p>
-      </div>
-    )
+    return <NoSpellsYet onManage={onManage} />
   }
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Controls */}
-      <div className="flex gap-2 flex-wrap">
-        <Input
+      <div className="flex gap-2 flex-wrap items-center">
+        <SearchInput
+          label="Search my spells"
           placeholder="Search…"
           value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="h-8 text-sm w-40 flex-1 min-w-0"
+          onChangeText={setSearch}
+          wrapperClassName="w-full sm:w-40 sm:flex-1 min-w-0"
         />
-        <Select value={levelFilter} onValueChange={setLevelFilter}>
-          <SelectTrigger className="h-8 text-xs w-32">
-            <SelectValue placeholder="All levels" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All levels</SelectItem>
-            {availableLevels.map(lvl => (
-              <SelectItem key={lvl} value={String(lvl)}>{LEVEL_LABELS[lvl]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          variant={preparedOnly ? 'default' : 'outline'}
-          size="sm"
-          className="h-8 text-xs shrink-0"
-          onClick={() => setPreparedOnly(p => !p)}
-        >
+        <Combobox aria-label="Level" className="w-36" options={levels} value={levelFilter} onValueChange={setLevelFilter} />
+        <ToggleChip selected={preparedOnly} onClick={() => setPreparedOnly(p => !p)}>
           ★ Prepared only
-        </Button>
+        </ToggleChip>
       </div>
 
-      <p className="text-xs text-muted-foreground">{filtered.length} of {resolved.length} spells</p>
+      <p className="text-xs text-foreground/60" aria-live="polite">{filtered.length} of {resolved.length} spells</p>
 
-      <ScrollArea className="h-[calc(100vh-260px)]">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 pr-3">
+      {filtered.length === 0 ? (
+        <EmptyState compact title="No spells match your filter." />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(({ ks, spell }) => (
             <SpellCard
               key={spell.id}
@@ -124,7 +107,7 @@ export function PlayView({
             />
           ))}
         </div>
-      </ScrollArea>
+      )}
 
       <SpellDetail spell={detailSpell} open={!!detailSpell} onClose={() => setDetailSpell(null)} />
     </div>

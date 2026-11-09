@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { BookOpen } from 'lucide-react'
+import { EmptyState } from '@/components/empty-state'
+import { SearchInput } from '@/components/ui/search-input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { SpellCard } from '@/components/SpellCard'
 import { SpellDetail } from '@/components/SpellDetail'
@@ -51,59 +51,49 @@ export function MySpells({
   const preparedCount = resolved.filter(x => x.spell.level > 0 && x.ks.prepared).length
 
   return (
-    <div className="flex flex-col h-full gap-3">
-      <div className="flex items-center gap-2">
-        <Input
-          placeholder="Search spells…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="h-8 text-sm"
-        />
-        {search && (
-          <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setSearch('')}>
-            ✕
-          </Button>
-        )}
-      </div>
+    <div className="flex flex-col gap-3">
+      <SearchInput label="Search my spells" placeholder="Search spells…" value={search} onChangeText={setSearch} />
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="w-full">
-          <TabsTrigger value="all" className="flex-1 text-xs">
+        <TabsList aria-label="Which spells" className="w-full">
+          <TabsTrigger value="all" className="flex-1">
             All ({resolved.length})
           </TabsTrigger>
-          <TabsTrigger value="prepared" className="flex-1 text-xs">
+          <TabsTrigger value="prepared" className="flex-1">
             Prepared ({preparedCount + cantripCount})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value={tab} className="mt-2">
-          {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              {resolved.length === 0 ? 'No spells yet — browse the spell list to add some.' : 'No spells match your filter.'}
-            </p>
+          {resolved.length === 0 ? (
+            <EmptyState
+              iconSlot={<BookOpen />}
+              title="No spells yet"
+              description="Add some from the class spell list."
+            />
+          ) : filtered.length === 0 ? (
+            <EmptyState compact title="No spells match your filter." />
           ) : (
-            <ScrollArea className="h-[calc(100vh-320px)]">
-              <div className="grid grid-cols-1 gap-2 pr-3">
-                {filtered.map(({ ks, spell }) => (
-                  <SpellCard
-                    key={spell.id}
-                    spell={spell}
-                    prepared={ks.prepared}
-                    currentSlots={character.currentSlots}
-                    currentPactSlots={character.currentPactSlots}
-                    pactSlotLevel={pactSlotLevel}
-                    isPact={isPact}
-                    spellSaveDC={dc}
-                    spellAttackBonus={atk}
-                    characterLevel={character.level}
-                    onTogglePrepared={() => onTogglePrepared(spell.id)}
-                    onCast={onCast}
-                    onRemove={() => onRemove(spell.id)}
-                    onDetail={() => setDetailSpell(spell)}
-                  />
-                ))}
-              </div>
-            </ScrollArea>
+            <div className="grid grid-cols-1 gap-2">
+              {filtered.map(({ ks, spell }) => (
+                <SpellCard
+                  key={spell.id}
+                  spell={spell}
+                  prepared={ks.prepared}
+                  currentSlots={character.currentSlots}
+                  currentPactSlots={character.currentPactSlots}
+                  pactSlotLevel={pactSlotLevel}
+                  isPact={isPact}
+                  spellSaveDC={dc}
+                  spellAttackBonus={atk}
+                  characterLevel={character.level}
+                  onTogglePrepared={() => onTogglePrepared(spell.id)}
+                  onCast={onCast}
+                  onRemove={() => onRemove(spell.id)}
+                  onDetail={() => setDetailSpell(spell)}
+                />
+              ))}
+            </div>
           )}
         </TabsContent>
       </Tabs>

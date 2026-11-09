@@ -1,6 +1,7 @@
-import { Moon, Sun } from 'lucide-react'
+import { Moon, Sun } from '@/components/ui/icons'
 import { Button } from '@/components/ui/button'
-import { LEVEL_LABELS, cn } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { LEVEL_LABELS } from '@/lib/spell-labels'
 import { getPactSlotLevel } from '@/lib/spellSlots'
 import type { Character, ClassData } from '@/types'
 
@@ -25,7 +26,7 @@ export function SpellSlotTracker({ character, currentClass, onShortRest, onLongR
 
   if (!currentClass) {
     return (
-      <div className="text-sm text-muted-foreground">Select a class to track spell slots.</div>
+      <div className="text-sm text-foreground/60">Select a class to track spell slots.</div>
     )
   }
 
@@ -34,16 +35,16 @@ export function SpellSlotTracker({ character, currentClass, onShortRest, onLongR
       <div className="flex flex-wrap gap-4 items-start">
         {isPact && maxPact ? (
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Pact ({LEVEL_LABELS[pactLevel]})</span>
-            <div className="flex gap-1">
+            <span className="text-xs text-foreground/60">Pact ({LEVEL_LABELS[pactLevel]})</span>
+            <div className="flex gap-1" role="img" aria-label={`${character.currentPactSlots} of ${maxPact.slots} pact slots left`}>
               {Array.from({ length: maxPact.slots }).map((_, i) => (
                 <div
                   key={i}
                   className={cn(
                     'h-4 w-4 rounded-full border-2 transition-colors',
                     i < character.currentPactSlots
-                      ? 'bg-primary border-primary'
-                      : 'border-muted-foreground/40'
+                      ? 'bg-active border-active'
+                      : 'border-foreground/30'
                   )}
                 />
               ))}
@@ -52,16 +53,16 @@ export function SpellSlotTracker({ character, currentClass, onShortRest, onLongR
         ) : (
           slotsToShow.map(({ level, max, current }) => (
             <div key={level} className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">{LEVEL_LABELS[level]}</span>
-              <div className="flex gap-1">
+              <span className="text-xs text-foreground/60">{LEVEL_LABELS[level]}</span>
+              <div className="flex gap-1" role="img" aria-label={`${current} of ${max} ${LEVEL_LABELS[level]}-level slots left`}>
                 {Array.from({ length: max }).map((_, i) => (
                   <div
                     key={i}
                     className={cn(
                       'h-4 w-4 rounded-full border-2 transition-colors',
                       i < current
-                        ? 'bg-primary border-primary'
-                        : 'border-muted-foreground/40'
+                        ? 'bg-active border-active'
+                        : 'border-foreground/30'
                     )}
                   />
                 ))}
@@ -72,18 +73,14 @@ export function SpellSlotTracker({ character, currentClass, onShortRest, onLongR
       </div>
 
       {slotsToShow.length === 0 && !isPact && (
-        <p className="text-xs text-muted-foreground">No spell slots at this level.</p>
+        <p className="text-xs text-foreground/60">No spell slots at this level.</p>
       )}
 
       <div className="flex gap-2">
         {currentClass.restType === 'short' && (
-          <Button variant="outline" size="sm" onClick={onShortRest} className="h-7 text-xs gap-1.5">
-            <Sun className="h-3 w-3" /> Short Rest
-          </Button>
+          <Button variant="outline" size="xs" iconSlot={<Sun />} content="Short Rest" onClick={onShortRest} />
         )}
-        <Button variant="outline" size="sm" onClick={onLongRest} className="h-7 text-xs gap-1.5">
-          <Moon className="h-3 w-3" /> Long Rest
-        </Button>
+        <Button variant="outline" size="xs" iconSlot={<Moon />} content="Long Rest" onClick={onLongRest} />
       </div>
     </div>
   )
