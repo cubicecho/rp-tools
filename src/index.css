@@ -1,33 +1,20 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+/* cubeui's palette, light and dark. It brings tw-animate-css and the reset the compiled
+   components lay out by. */
+@import "../cubeui-tokens.css";
 
-@layer base {
-  :root {
-    --background: 222 20% 10%;
-    --foreground: 210 40% 95%;
-    --card: 222 20% 13%;
-    --card-foreground: 210 40% 95%;
-    --popover: 222 20% 13%;
-    --popover-foreground: 210 40% 95%;
-    --primary: 38 92% 55%;
-    --primary-foreground: 222 20% 10%;
-    --secondary: 222 20% 18%;
-    --secondary-foreground: 210 40% 95%;
-    --muted: 222 20% 18%;
-    --muted-foreground: 215 20% 55%;
-    --accent: 222 20% 22%;
-    --accent-foreground: 210 40% 95%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 222 20% 22%;
-    --input: 222 20% 22%;
-    --ring: 38 92% 55%;
-    --radius: 0.5rem;
-  }
+/* The tokens stylesheet swaps the palette on a `.dark` class, which is what this variant reads. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+html,
+body,
+#root {
+  height: 100%;
 }
 
-@layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
 }
